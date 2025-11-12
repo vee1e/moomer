@@ -167,13 +167,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         match delta {
                             MouseScrollDelta::LineDelta(_, y) => {
                                 let zoom_factor = 1.0 + (y * 0.1);
-                                view_state.zoom *= zoom_factor;
-                                view_state.zoom = view_state.zoom.max(0.1).min(10.0);
+                                let new_zoom = (view_state.zoom * zoom_factor).max(0.1).min(10.0);
                                 
                                 let cursor_x = view_state.last_cursor_pos.0;
                                 let cursor_y = view_state.last_cursor_pos.1;
-                                view_state.offset_x = cursor_x - (cursor_x - view_state.offset_x) * zoom_factor;
-                                view_state.offset_y = cursor_y - (cursor_y - view_state.offset_y) * zoom_factor;
+                                
+                                let actual_zoom_factor = new_zoom / view_state.zoom;
+                                view_state.zoom = new_zoom;
+                                
+                                view_state.offset_x = cursor_x - (cursor_x - view_state.offset_x) * actual_zoom_factor;
+                                view_state.offset_y = cursor_y - (cursor_y - view_state.offset_y) * actual_zoom_factor;
                                 
                                 window.request_redraw();
                             }
@@ -181,13 +184,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 let zoom_delta = pos.y as f32;
                                 if zoom_delta.abs() > 0.1 {
                                     let zoom_factor = 1.0 + (zoom_delta * 0.005);
-                                    view_state.zoom *= zoom_factor;
-                                    view_state.zoom = view_state.zoom.max(0.1).min(10.0);
+                                    let new_zoom = (view_state.zoom * zoom_factor).max(0.1).min(10.0);
                                     
                                     let cursor_x = view_state.last_cursor_pos.0;
                                     let cursor_y = view_state.last_cursor_pos.1;
-                                    view_state.offset_x = cursor_x - (cursor_x - view_state.offset_x) * zoom_factor;
-                                    view_state.offset_y = cursor_y - (cursor_y - view_state.offset_y) * zoom_factor;
+                                    
+                                    let actual_zoom_factor = new_zoom / view_state.zoom;
+                                    view_state.zoom = new_zoom;
+                                    
+                                    view_state.offset_x = cursor_x - (cursor_x - view_state.offset_x) * actual_zoom_factor;
+                                    view_state.offset_y = cursor_y - (cursor_y - view_state.offset_y) * actual_zoom_factor;
                                 }
                                 
                                 window.request_redraw();
