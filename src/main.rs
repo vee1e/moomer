@@ -9,6 +9,55 @@ use winit::{
 #[cfg(target_os = "macos")]
 use winit::platform::macos::WindowExtMacOS;
 
+#[cfg(target_os = "macos")]
+use std::process::Command;
+
+#[cfg(target_os = "macos")]
+fn exit_fullscreen_if_active() -> Result<(), Box<dyn std::error::Error>> {
+    let script = r#"
+        tell application "System Events"
+            set frontApp to first application process whose frontmost is true
+            tell frontApp
+                set appName to name
+                set isFullScreen to value of attribute "AXFullScreen" of window 1
+                if isFullScreen is true then
+                    keystroke "f" using {control down, command down}
+                    return "exited"
+                end if
+            end tell
+        end tell
+        return "not_fullscreen"
+    "#;
+
+    let output = Command::new("osascript")
+        .arg("-e")
+        .arg(script)
+        .output()?;
+
+    let result = String::from_utf8_lossy(&output.stdout);
+    if result.trim() == "exited" {
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn send_cmd_tab() -> Result<(), Box<dyn std::error::Error>> {
+    let script = r#"
+        tell application "System Events"
+            key code 48 using command down
+        end tell
+    "#;
+
+    Command::new("osascript")
+        .arg("-e")
+        .arg(script)
+        .output()?;
+
+    Ok(())
+}
+
 struct ViewState {
     zoom: f32,
     offset_x: f32,
@@ -30,9 +79,12 @@ impl ViewState {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(target_os = "macos")]
+    let _ = exit_fullscreen_if_active();
+
     let screens = Screen::all()?;
     let screen = screens.first().ok_or("No screens found")?;
-    
+
     let screenshot = screen.capture()?;
     let screenshot_width = screenshot.width();
     let screenshot_height = screenshot.height();
@@ -51,14 +103,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_decorations(false)
         .build(&event_loop)?;
 
+    window.set_visible(true);
+    window.focus_window();
+
     #[cfg(target_os = "macos")]
     window.set_simple_fullscreen(true);
+
+    #[cfg(target_os = "macos")]
+    {
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        let _ = send_cmd_tab();
+    }
 
     let window_size = window.inner_size();
     let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
     let mut pixels = Pixels::new(window_size.width, window_size.height, surface_texture)?;
 
     let mut view_state = ViewState::new();
+
+    window.request_redraw();
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
