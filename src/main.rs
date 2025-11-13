@@ -13,23 +13,6 @@ use winit::platform::macos::WindowExtMacOS;
 use std::process::Command;
 
 #[cfg(target_os = "macos")]
-use cocoa::appkit::{NSApp, NSApplication};
-#[cfg(target_os = "macos")]
-use cocoa::base::nil;
-
-#[cfg(target_os = "macos")]
-fn activate_current_process() -> Result<(), Box<dyn std::error::Error>> {
-    unsafe {
-        let app = NSApp();
-        if app != nil {
-            app.activateIgnoringOtherApps_(true);
-        }
-    }
-
-    Ok(())
-}
-
-#[cfg(target_os = "macos")]
 fn get_frontmost_app() -> Result<String, Box<dyn std::error::Error>> {
     let script = r#"
         tell application "System Events"
@@ -48,34 +31,17 @@ fn get_frontmost_app() -> Result<String, Box<dyn std::error::Error>> {
 
 #[cfg(target_os = "macos")]
 fn activate_app_by_name(app_name: &str) -> Result<(), Box<dyn std::error::Error>> {
-    if app_name == "moomer" {
-        let script = r#"
-            tell application "System Events"
-                set moomerWindows to every window of (first application process whose name is "moomer")
-                if (count of moomerWindows) > 0 then
-                    set frontmost of first application process whose name is "moomer" to true
-                    perform action "AXRaise" of item 1 of moomerWindows
-                end if
-            end tell
-        "#;
-        
-        let _ = Command::new("osascript")
-            .arg("-e")
-            .arg(script)
-            .output()?;
-    } else {
-        let script = format!(r#"
-            tell application "System Events"
-                set targetApp to first application process whose name is "{}"
-                set frontmost of targetApp to true
-            end tell
-        "#, app_name);
+    let script = format!(r#"
+        tell application "System Events"
+            set targetApp to first application process whose name is "{}"
+            set frontmost of targetApp to true
+        end tell
+    "#, app_name);
 
-        let _ = Command::new("osascript")
-            .arg("-e")
-            .arg(&script)
-            .output()?;
-    }
+    Command::new("osascript")
+        .arg("-e")
+        .arg(&script)
+        .output()?;
 
     Ok(())
 }
@@ -110,6 +76,21 @@ fn exit_fullscreen_if_active() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[cfg(target_os = "macos")]
+fn send_cmd_tab() -> Result<(), Box<dyn std::error::Error>> {
+    let script = r#"
+        tell application "System Events"
+            key code 48 using command down
+        end tell
+    "#;
+
+    Command::new("osascript")
+        .arg("-e")
+        .arg(script)
+        .output()?;
+
+    Ok(())
+}
 
 struct ViewState {
     zoom: f32,
@@ -117,7 +98,6 @@ struct ViewState {
     offset_y: f32,
     drag_start: Option<(f32, f32)>,
     last_cursor_pos: (f32, f32),
-    activation_attempts: u32,
 }
 
 impl ViewState {
@@ -128,7 +108,6 @@ impl ViewState {
             offset_y: 0.0,
             drag_start: None,
             last_cursor_pos: (0.0, 0.0),
-            activation_attempts: 0,
         }
     }
 }
@@ -175,9 +154,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     window.focus_window();
 
     #[cfg(target_os = "macos")]
+    window.set_simple_fullscreen(true);
+
+    #[cfg(target_os = "macos")]
     {
-        window.set_simple_fullscreen(true);
-        let _ = activate_current_process();
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        let _ = activate_app_by_name("moomer");
     }
 
     let window_size = window.inner_size();
@@ -284,20 +266,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 _ => {}
             },
             Event::RedrawRequested(_) => {
-                #[cfg(target_os = "macos")]
-                if view_state.activation_attempts < 2 {
-                    view_state.activation_attempts += 1;
-                    let _ = activate_current_process();
-                    
-                    if let Ok(current_app) = get_frontmost_app() {
-                        if current_app == "moomer" {
-                            view_state.activation_attempts = 2;
-                        } else if view_state.activation_attempts < 2 {
-                            window.request_redraw();
-                        }
-                    }
-                }
-                
                 render(
                     pixels.frame_mut(),
                     &img_buffer,
