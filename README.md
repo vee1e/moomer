@@ -1,5 +1,7 @@
 # Moomer
 
+![Banner](banner.webp)
+
 Zoomer application for macOS. A poor man's clone of [tsoding/boomer](https://github.com/tsoding/boomer).
 
 ## Quick Start
